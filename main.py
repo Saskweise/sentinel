@@ -6,49 +6,33 @@ from log import Log
 
 app = FastAPI()
 
+# File where logs are added
 CSV_FILE = 'access_logs.csv'
 
-# Ejemplo de cómo crear una clase para la API
-# class Item(BaseModel):
-#     name: str
-#     price: float
-#     is_offer: Union[bool, None] = None
-
 @app.get("/")
-# Devuelve un JSON al acceder a la raíz
+# Returns a JSON when entering the root
 def read_root():
     return f"Bienvenido a la interfaz de Sentinel!"
 
-# Ejemplo de cómo devolver un JSON al tratar de acceder a un directorio
-# @app.get("/items/{item_id}")
-# Union es una función de Pydantic que valida el argumento
-# def read_item(item_id: int, q: Union[str, None] = None):
-#     return {"item_id": item_id, "q": q}
-
-# Ejemplo de cómo actualizar el item que le envíes
-# @app.put("/items/{item_id}")
-# def update_item(item_id: int, item: Item):
-#     return {"item_name": item.name, "item_id": item_id}
-
-# Actualiza CSV_FILE con el log correspondiente
+# Updates CSV_FILE with a log
 @app.post("/logs")
 def create_log(log: Log):
     data = {
-        # Hay que poner entre corchetes para pandas
+        # Brackets must be used in order to use pandas
         "source" : [log.ip],
         "route" : [log.route],
         "date" : [log.timestamp],
         "code" : [log.code_response]
         }
     
-    # Convierte en dataframe de pandas
-    # Index y Header en false para que añada las filas solamente
+    # Creates a panda's dataframe
+    # Index y Header are false in order to only add the rows
     pd.DataFrame(data).to_csv(CSV_FILE, mode='a', index= False, header= False)
 
     print(f"New IP added to access_logs.py: {log.ip}")
     return {"message": "OK!"}
 
-# Devuelve JSON con información de los logs
+# Returns a JSON with logs information
 @app.get("/status")
 def get_status():
     # Hay que pasarle las keys entre [] porque no pusimos headers
@@ -84,16 +68,26 @@ def get_queries():
 @app.get("/analyze")
 def get_analysis():
     df = pd.read_csv(CSV_FILE, names= ['source', 'route', 'date', 'code'])
+
     # Sorteamos por ip y su número de peticiones
     queries =  df.groupby('source').size()
+
     # Sorteamos por aquellas ip con código mayor que 400
     errors = df[df['code'] > 400].groupby('source').size()
 
-    # Combinamos ambos resultados en un dataframe
+    # Creamos un diccionario que agrupa las rutas por ip
     # fillna(0) sustituye los 'NaN' por 0 para que mantenga el formato JSON
     # astype(int) muestra las queries en enteros, sino las muestra en float por los NaN
-    summary = pd.DataFrame({"queries" : queries, "errors" : errors}).fillna(0).astype(int)
+    routes = df.groupby(['source', 'route']).size().unstack().fillna(0).astype(int)
+    # Las rutas las convertimos en un diccionario
+    routes = routes.to_dict(orient='index')
 
-    # orient='index' hace que se filtren por ip
-    # anteriormente ya lo habíamos filtrado por ip, solo lo combinamos
-    return summary.to_dict(orient= "index")
+    # Combinamos ambos resultados en un dataframe
+    summary = pd.DataFrame({"queries" : queries, "errors" : errors}).fillna(0).astype(int)
+    summary = summary.to_dict(orient='index')
+
+    # Adds a route dictionary to every key, if it's null, it adds an empty dict
+    for ip in summary:
+        summary[ip]["routes"] = routes.get(ip, {})
+
+    return summary
