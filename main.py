@@ -1,3 +1,4 @@
+import os
 from typing import Union
 import pandas as pd
 from fastapi import FastAPI
@@ -9,10 +10,17 @@ app = FastAPI()
 # File where logs are added
 CSV_FILE = 'access_logs.csv'
 
-@app.get("/")
+# If CSV_FILE doesn't exists, it is created
+if not os.path.exists(CSV_FILE):
+    df = pd.DataFrame(columns=['source', 'route', 'date', 'code'])
+    df = df.to_csv(CSV_FILE, index=False, header=False)
+    print(f"{CSV_FILE} has been created successfully.")
+
+
 # Returns a JSON when entering the root
+@app.get("/")
 def read_root():
-    return f"Bienvenido a la interfaz de Sentinel!"
+    return f"Sentinel Online."
 
 # Updates CSV_FILE with a log
 @app.post("/logs")
@@ -26,7 +34,7 @@ def create_log(log: Log):
         }
     
     # Creates a panda's dataframe
-    # Index y Header are false in order to only add the rows
+    # Index and Header are false in order to only add the rows
     pd.DataFrame(data).to_csv(CSV_FILE, mode='a', index= False, header= False)
 
     print(f"New IP added to access_logs.py: {log.ip}")
