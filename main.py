@@ -119,3 +119,24 @@ def get_queries():
     
     except Exception as e:
         return {"error": str(e)}
+    
+@app.get("/complete")
+def get_complete():
+    try:
+        df = pd.read_csv(CSV_FILE, names = ['source', 'route', 'date', 'code'])
+
+        queries = df.groupby('source').size().rename("Total Queries")# So that column isn't named 0
+        errors = df[df['code'] >= 400].groupby('source').size().rename("Total Errors")
+        paths = df.groupby('source')['route'].nunique().rename("Unique Paths")
+
+        df['date'] = pd.to_datetime(df['date'])
+        df['min'] = df['date'].dt.floor(('min')).astype(str)
+
+        speed = df.groupby(['source', 'min']).size()
+        avg_speed = speed.groupby('source').mean().rename("Average QPM")
+        summary = pd.concat([queries, errors, paths, avg_speed], axis=1).fillna(0).astype(int)
+        summary = summary.to_dict(orient='index')
+        return summary
+
+    except Exception as e:
+        return {"error": str(e)}
