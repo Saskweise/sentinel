@@ -16,8 +16,10 @@ def send_log(ip, route, execution_code):
     print(f"Log sent: {ip} -> {route}")
 
 
-for i in range(20):
+for i in range(10):
     send_log("192.168.1.104", "/api/data", 200)
+    send_log("192.168.1.104", "/admin", 403)
  
-for i in range(15):
+for i in range(10):
     send_log("203.0.113.45", "/admin", 403)
+    send_log("203.0.113.45", "/status", 200)

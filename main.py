@@ -43,14 +43,13 @@ def create_log(log: Log):
 # Returns a JSON with logs information
 @app.get("/status")
 def get_status():
-    # Hay que pasarle las keys entre [] porque no pusimos headers
     df = pd.read_csv(CSV_FILE, names = ['source', 'route', 'date', 'code']) 
-    # Conteo de logs
+    # logs count
     total_logs = len(df)
-    # Devuelve el número de ips únicas
+    # Returns the amount of unique ips
     unique_ips = df["source"].nunique()
-    # Devuelve el número de peticiones con código > 400
-    errors = len(df.query('code > 400'))
+    # Returns the amount of ips with code >= 400
+    errors = len(df.query('code >= 400'))
 
     return {
         "total_logs" : total_logs,
@@ -58,12 +57,12 @@ def get_status():
         "errors_amount" : errors
     }
 
-# Devuelve JSON con las peticiones de cada ip
+# Returns a JSON with ip queries
 @app.get("/ip-queries")
 def get_queries():
-    df = pd.read_csv(CSV_FILE, names= ['source', 'route', 'date', 'code'])
-    # Sortea por ip y directorio al que intenta acceder
-    # Debe convertirse a diccionario porque el objeto que da pandas no es un dict
+    df = pd.read_csv(CSV_FILE, names = ['source', 'route', 'date', 'code']) 
+    # Sorts by ip and path that are being entered
+    # Must be converted to dict due to json api format
     q_by_ip = df.groupby('source')['route'].size().to_dict()
     only_errors = df[df['code'] >= 400]
     errors = only_errors.groupby('source').size()
@@ -72,30 +71,51 @@ def get_queries():
         "403 Queries" : errors.to_dict()
     }
 
-# Devuelve JSON con con ips y estadísticas
+# Returns a JSON with metrics
 @app.get("/analyze")
 def get_analysis():
-    df = pd.read_csv(CSV_FILE, names= ['source', 'route', 'date', 'code'])
+    try:
+        df = pd.read_csv(CSV_FILE, names = ['source', 'route', 'date', 'code']) 
 
-    # Sorteamos por ip y su número de peticiones
-    queries =  df.groupby('source').size()
+        # Sorts by ip and query amount
+        queries =  df.groupby('source').size()
 
-    # Sorteamos por aquellas ip con código mayor que 400
-    errors = df[df['code'] > 400].groupby('source').size()
+        # Sorts by ip with code >= 400
+        errors = df[df['code'] >= 400].groupby('source').size()
 
-    # Creamos un diccionario que agrupa las rutas por ip
-    # fillna(0) sustituye los 'NaN' por 0 para que mantenga el formato JSON
-    # astype(int) muestra las queries en enteros, sino las muestra en float por los NaN
-    routes = df.groupby(['source', 'route']).size().unstack().fillna(0).astype(int)
-    # Las rutas las convertimos en un diccionario
-    routes = routes.to_dict(orient='index')
+        # dict that groups path by ip
+        # fillna(0) replaces ‘NaN’ with 0 to maintain the JSON format
+        # astype(int) displays queries as integers; otherwise, they are displayed as floats due to NaN
+        routes = df.groupby(['source', 'route']).size().unstack().fillna(0).astype(int)
+        # Paths are converted into dicts
+        routes = routes.to_dict(orient='index')
 
-    # Combinamos ambos resultados en un dataframe
-    summary = pd.DataFrame({"queries" : queries, "errors" : errors}).fillna(0).astype(int)
-    summary = summary.to_dict(orient='index')
+        # Results are merged into a dataframe
+        summary = pd.DataFrame({"queries" : queries, "errors" : errors}).fillna(0).astype(int)
+        summary = summary.to_dict(orient='index')
 
-    # Adds a route dictionary to every key, if it's null, it adds an empty dict
-    for ip in summary:
-        summary[ip]["routes"] = routes.get(ip, {})
+        # Adds a route dictionary to every key, if it's null, it adds an empty dict
+        for ip in summary:
+            summary[ip]["routes"] = routes.get(ip, {})
 
-    return summary
+        return summary
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/queries")
+def get_queries():
+    try:
+        df = pd.read_csv(CSV_FILE, names = ['source', 'route', 'date', 'code'])
+        # It converts the column into datetime format
+        df['date'] = pd.to_datetime(df['date'])
+        # A new column is created in order to groupby it later
+        # It must be converted to str, otherwise it becomes an object type, we need str
+        df['min'] = df['date'].dt.floor('min').astype(str)
+        # unstack is used in order to group it into a matrix
+        # fill_value=0 does the same work as fill.na(0) but it does it in one execution
+        q_per_min = df.groupby(['source', 'min']).size().unstack(fill_value=0)
+        q_per_min = q_per_min.to_dict(orient='index')
+        return q_per_min
+    
+    except Exception as e:
+        return {"error": str(e)}
