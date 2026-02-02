@@ -4,6 +4,9 @@ from log import Log
 
 URL = "http://localhost:8000/logs"
 
+# A session is opened, so multiple queries can be sent
+session = requests.sessions()
+
 def send_log(ip, route, execution_code):
     new_log = Log(
             ip = ip,
@@ -12,8 +15,12 @@ def send_log(ip, route, execution_code):
             timestamp = datetime.now().isoformat(),
             code_response = execution_code
             )
-    requests.post(URL, data=new_log.model_dump_json()) # Convierte el new_log en json
-    print(f"Log sent: {ip} -> {route}")
+    
+    try:
+        session.post(URL, data=new_log.model_dump_json()) # Converts new_log into json 
+        print(f"Log sent: {ip} -> {route}")
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 for i in range(10):
